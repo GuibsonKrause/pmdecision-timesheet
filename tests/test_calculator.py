@@ -1,11 +1,15 @@
 """
 test_calculator.py — Testes unitários para a lógica de cálculo de horas.
 
-Valida que a soma dos lançamentos bate exatamente com o total informado.
+Valida que a soma dos lançamentos bate exatamente com o total informado
+e que a jornada diária respeita o intervalo [7h50, 8h10].
 """
 
 import pytest
-from src.calculator import generate_time_entries, _get_working_days
+from src.calculator import (
+    generate_time_entries, _get_working_days,
+    MIN_DAY_MINUTES, MAX_DAY_MINUTES,
+)
 from datetime import date
 
 
@@ -39,9 +43,10 @@ class TestGetWorkingDays:
 class TestGenerateTimeEntries:
     """Testes para a geração de lançamentos de ponto."""
 
-    @pytest.mark.parametrize("total_hours", [160, 120, 176, 80, 200])
+    @pytest.mark.parametrize("total_hours", [157, 158, 160, 162, 163])
     def test_total_matches_exactly(self, total_hours):
         """A soma total dos minutos DEVE bater exatamente com o target."""
+        # Fev/2026: 20 dias úteis → viável de ~156.7h a ~163.3h
         entries = generate_time_entries(
             year=2026, month=2,
             start_day=1, end_day=28,
@@ -69,6 +74,23 @@ class TestGenerateTimeEntries:
             assert "Manhã" in periods
             assert "Tarde" in periods
 
+    def test_daily_duration_within_range(self):
+        """Cada dia deve ter entre 7h50 (470min) e 8h10 (490min)."""
+        entries = generate_time_entries(
+            year=2026, month=2,
+            start_day=1, end_day=28,
+            holidays=[],
+            total_hours=160,
+        )
+        days = set(e.day for e in entries)
+        for day in days:
+            day_entries = [e for e in entries if e.day == day]
+            day_total = sum(e.duration_minutes for e in day_entries)
+            assert MIN_DAY_MINUTES <= day_total <= MAX_DAY_MINUTES, (
+                f"Dia {day}: {day_total} min fora do intervalo "
+                f"[{MIN_DAY_MINUTES}, {MAX_DAY_MINUTES}]"
+            )
+
     def test_no_exact_round_times(self):
         """Horários não devem ser redondos (00 ou 30 em todos)."""
         entries = generate_time_entries(
@@ -87,11 +109,13 @@ class TestGenerateTimeEntries:
     def test_holidays_are_excluded(self):
         """Dias de feriado não devem ter lançamentos."""
         holidays = [3, 17, 24]
+        # 17 dias úteis (20 - 3 feriados em dia útil)
+        # Faixa viável: ~133.2h a ~138.8h → usar 136
         entries = generate_time_entries(
             year=2026, month=2,
             start_day=1, end_day=28,
             holidays=holidays,
-            total_hours=120,
+            total_hours=136,
         )
         entry_days = set(e.day for e in entries)
         for h in holidays:
@@ -131,26 +155,55 @@ class TestGenerateTimeEntries:
                 total_hours=160,
             )
 
+    def test_infeasible_total_raises_error(self):
+        """Se o total não for viável com a restrição diária, deve lançar ValueError."""
+        # 20 dias úteis, mas 80h = 240min/dia → abaixo de 470min
+        with pytest.raises(ValueError, match="não é viável"):
+            generate_time_entries(
+                year=2026, month=2,
+                start_day=1, end_day=28,
+                holidays=[],
+                total_hours=80,
+            )
+
     def test_with_different_months(self):
         """Testar com meses de diferentes quantidades de dias."""
-        # Janeiro com 23 dias úteis
+        # Janeiro/2026 com feriado dia 1: 21 dias úteis
+        # Faixa viável: ~164.3h a ~171.5h → usar 168
         entries = generate_time_entries(
             year=2026, month=1,
             start_day=1, end_day=31,
             holidays=[1],  # Confraternização
-            total_hours=176,
+            total_hours=168,
         )
         total_minutes = sum(e.duration_minutes for e in entries)
-        assert total_minutes == 176 * 60
+        assert total_minutes == 168 * 60
 
     def test_consistency_across_multiple_runs(self):
         """Múltiplas execuções devem sempre bater o total exato."""
         for _ in range(10):
             entries = generate_time_entries(
-                year=2026, month=3,
-                start_day=1, end_day=31,
+                year=2026, month=2,
+                start_day=1, end_day=28,
                 holidays=[],
                 total_hours=160,
             )
             total_minutes = sum(e.duration_minutes for e in entries)
             assert total_minutes == 160 * 60
+
+    def test_daily_range_across_multiple_runs(self):
+        """Em múltiplas execuções, TODOS os dias devem respeitar [7h50, 8h10]."""
+        for _ in range(10):
+            entries = generate_time_entries(
+                year=2026, month=2,
+                start_day=1, end_day=28,
+                holidays=[],
+                total_hours=160,
+            )
+            days = set(e.day for e in entries)
+            for day in days:
+                day_entries = [e for e in entries if e.day == day]
+                day_total = sum(e.duration_minutes for e in day_entries)
+                assert MIN_DAY_MINUTES <= day_total <= MAX_DAY_MINUTES, (
+                    f"Dia {day}: {day_total} min fora do intervalo"
+                )

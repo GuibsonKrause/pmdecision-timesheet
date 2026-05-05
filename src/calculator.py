@@ -65,6 +65,10 @@ def _total_minutes_from_time(t: time) -> int:
     return t.hour * 60 + t.minute
 
 
+MIN_DAY_MINUTES = 470  # 7h50min
+MAX_DAY_MINUTES = 490  # 8h10min
+
+
 def generate_time_entries(
     year: int,
     month: int,
@@ -77,10 +81,10 @@ def generate_time_entries(
     Gera lançamentos de ponto com variação aleatória e soma exata.
 
     Algoritmo:
-    1. Calcula minutos base por dia (total / dias_úteis).
-    2. Divide cada dia em manhã (~metade) e tarde (~metade).
-    3. Aplica variação aleatória nos horários.
-    4. No último dia, ajusta para compensar a diferença acumulada.
+    1. Valida se o total é viável (cada dia entre 7h50 e 8h10).
+    2. Sorteia duração de cada dia dentro de [470, 490] minutos.
+    3. Redistribui a diferença para bater exatamente o total.
+    4. Divide cada dia em manhã e tarde com variação nos horários.
     """
     working_days = _get_working_days(year, month, start_day, end_day, holidays)
 
@@ -89,32 +93,47 @@ def generate_time_entries(
 
     total_minutes = int(total_hours * 60)
     num_days = len(working_days)
-    base_minutes_per_day = total_minutes / num_days
+
+    # Validar se o total é viável com a restrição diária
+    min_possible = MIN_DAY_MINUTES * num_days
+    max_possible = MAX_DAY_MINUTES * num_days
+    if total_minutes < min_possible or total_minutes > max_possible:
+        min_hours = min_possible / 60
+        max_hours = max_possible / 60
+        raise ValueError(
+            f"Total de {total_hours}h não é viável com {num_days} dias úteis. "
+            f"O intervalo permitido é de {min_hours:.1f}h a {max_hours:.1f}h "
+            f"(jornada diária entre 7h50 e 8h10)."
+        )
+
+    # Sortear duração de cada dia dentro do intervalo permitido
+    day_durations = [random.randint(MIN_DAY_MINUTES, MAX_DAY_MINUTES) for _ in range(num_days)]
+
+    # Redistribuir diferença para bater o total exato
+    current_total = sum(day_durations)
+    diff = total_minutes - current_total
+
+    indices = list(range(num_days))
+    random.shuffle(indices)
+
+    for i in indices:
+        if diff == 0:
+            break
+        if diff > 0:
+            can_add = MAX_DAY_MINUTES - day_durations[i]
+            add = min(diff, can_add)
+            day_durations[i] += add
+            diff -= add
+        else:
+            can_remove = day_durations[i] - MIN_DAY_MINUTES
+            remove = min(-diff, can_remove)
+            day_durations[i] -= remove
+            diff += remove
 
     entries: list[TimeEntry] = []
-    accumulated_minutes = 0
 
     for idx, work_date in enumerate(working_days):
-        is_last_day = (idx == num_days - 1)
-        remaining_days = num_days - idx
-
-        if is_last_day:
-            # Último dia: ajusta para bater exatamente
-            day_minutes = total_minutes - accumulated_minutes
-        else:
-            # Variação de ±15 min na carga diária para parecer natural
-            variation = random.randint(-15, 15)
-            day_minutes = int(base_minutes_per_day) + variation
-
-            # Garantir mínimo razoável por dia (pelo menos 4h) — somente dias não-últimos
-            day_minutes = max(day_minutes, 240)
-
-            # Garantir que não ultrapassa o orçamento restante
-            # (deixar pelo menos 240 min para cada dia restante)
-            remaining_after = total_minutes - accumulated_minutes - day_minutes
-            min_needed_for_rest = (remaining_days - 1) * 240
-            if remaining_after < min_needed_for_rest:
-                day_minutes = total_minutes - accumulated_minutes - min_needed_for_rest
+        day_minutes = day_durations[idx]
 
         # --- HORÁRIOS COM VARIAÇÃO DE ±20 MIN ---
         # Entrada: ~09:00
@@ -162,8 +181,6 @@ def generate_time_entries(
             end_time=afternoon_end,
             duration_minutes=afternoon_minutes,
         ))
-
-        accumulated_minutes += (morning_minutes + afternoon_minutes)
 
     return entries
 

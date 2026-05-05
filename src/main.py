@@ -7,9 +7,9 @@ Orquestra: CLI → Cálculo → Conferência → Automação Web.
 import sys
 from rich.console import Console
 
-from src.cli import get_user_input
-from src.calculator import generate_time_entries, display_entries_table
-from src.automation import run as run_automation
+from cli import get_user_input
+from calculator import generate_time_entries, display_entries_table
+from automation import run as run_automation
 
 console = Console()
 

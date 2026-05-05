@@ -1,10 +1,11 @@
 """
 cli.py — Módulo de entrada do usuário via CLI interativo.
 
-Solicita: dia inicial, dia final, feriados, total de horas.
+Solicita: mês/ano de referência, dia inicial, dia final, feriados, total de horas.
 Usa prompts de texto para compatibilidade com Python 3.14.
 """
 
+import calendar
 from datetime import date
 from InquirerPy import inquirer
 
@@ -45,20 +46,29 @@ def get_user_input() -> dict:
     """Solicita e valida os dados de entrada do usuário."""
 
     today = date.today()
-    current_month = today.month
-    current_year = today.year
 
-    print(f"\nMes de referencia: {today.strftime('%B/%Y')}\n")
+    # Mês de referência
+    month = _ask_int("Mes de referencia (1-12):", default=today.month, min_val=1, max_val=12)
+
+    # Ano de referência
+    year = _ask_int("Ano de referencia:", default=today.year, min_val=2020, max_val=2099)
+
+    # Último dia do mês selecionado
+    last_day_of_month = calendar.monthrange(year, month)[1]
+
+    month_name = calendar.month_name[month]
+    print(f"\n  Periodo selecionado: {month_name}/{year}\n")
 
     # Dia inicial
-    start_day = _ask_int("Dia inicial do período:", default=1, min_val=1, max_val=31)
+    start_day = _ask_int("Dia inicial do periodo:", default=1, min_val=1, max_val=last_day_of_month)
 
-    # Dia final
-    end_day = _ask_int("Dia final do período:", default=today.day, min_val=start_day, max_val=31)
+    # Dia final (default = último dia do mês ou dia atual se for o mês corrente)
+    default_end = today.day if (month == today.month and year == today.year) else last_day_of_month
+    end_day = _ask_int("Dia final do periodo:", default=default_end, min_val=start_day, max_val=last_day_of_month)
 
     # Feriados
     holidays_input = inquirer.text(
-        message="Dias de feriado (separados por vírgula, ou vazio):",
+        message="Dias de feriado (separados por virgula, ou vazio):",
         default="",
     ).execute()
 
@@ -67,11 +77,11 @@ def get_user_input() -> dict:
         holidays = [int(d.strip()) for d in holidays_input.split(",") if d.strip()]
 
     # Total de horas
-    total_hours = _ask_float("Total de horas a lançar no mês:", default=160)
+    total_hours = _ask_float("Total de horas a lancar no mes:", default=160)
 
     # Confirmar modo dry-run
     dry_run = inquirer.confirm(
-        message="Executar em modo DRY-RUN (sem automação web)?",
+        message="Executar em modo DRY-RUN (sem automacao web)?",
         default=False,
     ).execute()
 
@@ -80,7 +90,7 @@ def get_user_input() -> dict:
         "end_day": end_day,
         "holidays": holidays,
         "total_hours": total_hours,
-        "month": current_month,
-        "year": current_year,
+        "month": month,
+        "year": year,
         "dry_run": dry_run,
     }

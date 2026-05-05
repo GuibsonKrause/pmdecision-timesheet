@@ -7,7 +7,7 @@ Preenche o formulário de lançamento de ponto no sistema pmdecision.
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeout
 from rich.console import Console
 
-from src.calculator import TimeEntry
+from calculator import TimeEntry
 
 console = Console()
 
@@ -58,12 +58,6 @@ def _handle_post_submit(page: Page) -> None:
             page.wait_for_timeout(500)
     except Exception:
         pass  # Sem modal, segue normalmente
-
-    # Tratar alertas JavaScript nativos
-    try:
-        page.on("dialog", lambda dialog: dialog.accept())
-    except Exception:
-        pass
 
     # Aguardar o formulário estar pronto para o próximo lançamento
     _wait_for_form_ready(page, timeout=15000)
@@ -143,6 +137,13 @@ def run(entries: list[TimeEntry]) -> None:
             return
 
         console.print("[bold green][OK] Formulario detectado! Iniciando lancamentos...\n[/bold green]")
+
+        # Registrar handler de dialogs JS uma unica vez (aceita alertas automaticamente)
+        page.on("dialog", lambda dialog: dialog.accept())
+
+        # Garantir formulário limpo navegando para a URL de criação
+        page.goto(URL, wait_until="domcontentloaded")
+        _wait_for_form_ready(page, timeout=15000)
 
         # Processar cada lançamento
         for idx, entry in enumerate(entries, start=1):
