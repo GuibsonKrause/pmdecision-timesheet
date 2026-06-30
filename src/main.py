@@ -27,8 +27,11 @@ def main():
         sys.exit(0)
 
     console.print(f"\n[dim]Configuração:[/dim]")
-    console.print(f"  Período: {user_input['start_day']:02d}/{user_input['month']:02d} "
-                  f"a {user_input['end_day']:02d}/{user_input['month']:02d}/{user_input['year']}")
+    if user_input['start_day'] == user_input['end_day']:
+        console.print(f"  Período: Dia {user_input['start_day']:02d}/{user_input['month']:02d}/{user_input['year']}")
+    else:
+        console.print(f"  Período: {user_input['start_day']:02d}/{user_input['month']:02d} "
+                      f"a {user_input['end_day']:02d}/{user_input['month']:02d}/{user_input['year']}")
     console.print(f"  Feriados: {user_input['holidays'] or 'Nenhum'}")
     console.print(f"  Total de horas: {user_input['total_hours']}h")
     console.print(f"  Modo: {'DRY-RUN' if user_input['dry_run'] else 'AUTOMACAO'}")

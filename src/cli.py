@@ -8,6 +8,7 @@ Usa prompts de texto para compatibilidade com Python 3.14.
 import calendar
 from datetime import date
 from InquirerPy import inquirer
+from calculator import _get_working_days
 
 
 def _ask_int(message: str, default: int, min_val: int = 1, max_val: int = 999) -> int:
@@ -76,8 +77,19 @@ def get_user_input() -> dict:
     if holidays_input.strip():
         holidays = [int(d.strip()) for d in holidays_input.split(",") if d.strip()]
 
+    # Calcular dias úteis no intervalo selecionado para sugerir horas proporcionais
+    working_days = _get_working_days(year, month, start_day, end_day, holidays)
+    num_working_days = len(working_days)
+    default_hours = num_working_days * 8  # 8h por dia útil
+
+    print(f"\n  Dias uteis no periodo selecionado: {num_working_days}")
+    print(f"  Sugestao de horas (8h/dia): {default_hours}h\n")
+
     # Total de horas
-    total_hours = _ask_float("Total de horas a lancar no mes:", default=160)
+    total_hours = _ask_float(
+        f"Total de horas a lancar no periodo ({num_working_days} dias uteis):",
+        default=default_hours,
+    )
 
     # Confirmar modo dry-run
     dry_run = inquirer.confirm(
